@@ -15,8 +15,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # The following adds calendar navigation widget to the Application.
-  flutter_calendar: ^0.0.8
 
 
   # The following adds the Cupertino Icons font to your application.
