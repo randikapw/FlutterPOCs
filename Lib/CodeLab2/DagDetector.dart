@@ -35,10 +35,12 @@ class SwipableViewState extends State<SwipableView> {
   Widget build(BuildContext context) {
     return GestureDetector(
       onHorizontalDragUpdate: (DragUpdateDetails details){
-        _updateMessage('Dragging');
+        _updateMessage('Dragging' + details.delta.toString());
       },
       onHorizontalDragEnd: (DragEndDetails details){
-        _updateMessage('Waiting for a drag');
+        final double velocityX = details.primaryVelocity;
+
+        _updateMessage('Drag finished derected to ' + (velocityX < 0 ? 'Left' : 'Right'));
       },
       child: Container(
         decoration: BoxDecoration(
