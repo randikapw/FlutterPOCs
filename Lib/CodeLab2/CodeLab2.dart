@@ -108,14 +108,27 @@ class ChatMessage extends StatelessWidget {
   final String text;
   final AnimationController animationController;
 
+  static final Animatable<Offset> _drawerTeween = Tween<Offset>(
+    begin: Offset(-1.0, 0.0),
+    end: Offset.zero
+  ).chain(CurveTween(
+  curve: Curves.fastOutSlowIn,
+  ));
+
+  void _reverseAnimation() {
+    animationController.reverse();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return SizeTransition(
-      sizeFactor: CurvedAnimation(
-        parent: animationController,
-        curve: Curves.easeOut,
-      ),
-      axisAlignment: 0.0,
+//    return SizeTransition(
+//      sizeFactor: CurvedAnimation(
+//        parent: animationController,
+//        curve: Curves.easeOut,
+//      ),
+//      axisAlignment: 0.0,
+      return SlideTransition(
+        position: animationController.drive(_drawerTeween),
       child: Container(
         margin: EdgeInsets.symmetric(vertical: 10.0),
         child: Row(
@@ -123,7 +136,9 @@ class ChatMessage extends StatelessWidget {
           children: <Widget>[
             Container(
               margin: EdgeInsets.only(right: 16.0),
-              child: CircleAvatar(child: Text(_name[0])),
+              child: CircleAvatar(
+                  child: Text(_name[0]),
+              ),
             ),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -134,6 +149,13 @@ class ChatMessage extends StatelessWidget {
                   child: Text(text),
                 ),
               ],
+            ),
+            Expanded(
+              child: Container(),
+            ),
+            IconButton(
+              icon: Icon(Icons.undo),
+              onPressed: _reverseAnimation,
             ),
           ],
         ),
