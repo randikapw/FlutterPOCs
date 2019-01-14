@@ -27,15 +27,15 @@ class SwipableViewState extends State<SwipableView> with TickerProviderStateMixi
     animationController = AnimationController(
         duration: Duration(milliseconds: 700),
         vsync: this);
-    animationFromLeft = animationController.drive(_drawerTeweenLeft);
-    animationFromRigh = animationController.drive(_drawerTeweenRight);
-    currentAnimation = animationFromRigh;
+    _animationFromLeft = animationController.drive(_drawerTweenLeft);
+    _animationFromRight = animationController.drive(_drawerTweenRight);
+    _currentAnimation = _animationFromRight;
   }
 
   String _message = 'New message';
   AnimationController animationController; //Always keep in mind to dispose this controller when disposing the widget
-  final sliderKey = GlobalKey();
-  static final Animatable<Offset> _drawerTeweenLeft = Tween<Offset>(
+
+  static final Animatable<Offset> _drawerTweenLeft = Tween<Offset>(
       begin: Offset(-1.0, 0.0),
       end: Offset.zero
   ).chain(CurveTween(
@@ -43,16 +43,16 @@ class SwipableViewState extends State<SwipableView> with TickerProviderStateMixi
   ));
 
 
-  static final Animatable<Offset> _drawerTeweenRight = Tween<Offset>(
+  static final Animatable<Offset> _drawerTweenRight = Tween<Offset>(
       begin: Offset(1.0, 0.0),
       end: Offset.zero
   ).chain(CurveTween(
     curve: Curves.fastOutSlowIn,
   ));
 
-  Animation<Offset> animationFromLeft;
-  Animation<Offset> animationFromRigh;
-  Animation<Offset> currentAnimation;
+  Animation<Offset> _animationFromLeft;
+  Animation<Offset> _animationFromRight;
+  Animation<Offset> _currentAnimation;
 
 
   void _updateMessage(String newMessage){
@@ -63,8 +63,10 @@ class SwipableViewState extends State<SwipableView> with TickerProviderStateMixi
 
   void _updateAnimation(Animation animation){
     setState(() {
-      currentAnimation = animation;
+      _currentAnimation = animation;
     });
+    animationController.reset();
+    animationController.forward();
   }
 
   @override
@@ -75,21 +77,17 @@ class SwipableViewState extends State<SwipableView> with TickerProviderStateMixi
         _updateMessage('Dragging' + details.delta.toString());
       },
       onHorizontalDragEnd: (DragEndDetails details){
-        final double velocityX = details.primaryVelocity;
-        if (velocityX > 0){
-          _updateAnimation(animationFromLeft);
-          animationController.reset();
-          animationController.forward();
-        } else {
-          _updateAnimation(animationFromRigh);
-          animationController.reset();
-          animationController.reverse();
+        final double velocityNorm = 500; // Threshold which limit the swipe animation.
+        final double velocityX = details.primaryVelocity / velocityNorm;
+        if (velocityX > 1){
+          _updateAnimation(_animationFromLeft);
+        } else if (velocityX < -1){
+          _updateAnimation(_animationFromRight);
         }
-        _updateMessage('Drag finished derected to ' + (velocityX < 0 ? 'Left' : 'Right'));
+        _updateMessage('Drag finished derected to ' + (velocityX < 0 ? 'Left ' : 'Right ') + velocityX.toString());
       },
       child: SlideTransition(
-          key: sliderKey,
-          position: currentAnimation,
+          position: _currentAnimation,
           child: Container(
             decoration: BoxDecoration(
                 color: Colors.blue[100]
