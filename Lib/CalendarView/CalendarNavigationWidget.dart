@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'dart:math';
 
 void main(){
   runApp(Application());
@@ -30,16 +31,47 @@ class CalendarNav extends StatefulWidget {
 class CalendarNavState extends State<CalendarNav> {
 
   DateTime now;
+  _NavigationHeader header;
+  static const Duration _weekDuration = Duration(days: 7);
 
   @override
   void initState() {
     super.initState();
     now = DateTime.now();
+    header = _NavigationHeader(now);
+  }
+
+  void _changeWeekTo(DateTime newDate){
+    now = newDate;
+    setState(() {
+      header = _NavigationHeader(newDate);
+    });
+  }
+
+  void _onDragEnd(DragEndDetails details){
+    final double dxNorm = 1000; // Threshold which limit the swipe animation.
+    final double swipngAngleNorm = 40; //in degrees.
+    final double velocityX = details.velocity.pixelsPerSecond.dx / dxNorm;
+    final double swipingAngle = (details.velocity.pixelsPerSecond.direction * 180 / pi).abs();
+
+    if (velocityX > 1 && swipingAngle < swipngAngleNorm ){
+      //_updateAnimation(_animationFromLeft);
+      print('Swiped Left to Right');
+      _changeWeekTo(now.subtract(_weekDuration));
+    } else if (velocityX < -1 && swipingAngle > 180 - swipngAngleNorm){
+      //_updateAnimation(_animationFromRight);
+      print('Swiped Right to Left');
+      _changeWeekTo(now.add(_weekDuration));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return _NavigationHeader(now);
+    return GestureDetector(
+      onHorizontalDragEnd: _onDragEnd,
+      child: header,
+    );
+
   }
 
 
