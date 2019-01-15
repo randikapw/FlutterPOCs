@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:math';
 
 void main(){
   runApp(DragListner());
@@ -36,8 +37,8 @@ class SwipableViewState extends State<SwipableView> with TickerProviderStateMixi
   AnimationController animationController; //Always keep in mind to dispose this controller when disposing the widget
 
   static final Animatable<Offset> _drawerTweenLeft = Tween<Offset>(
-      begin: Offset(-1.0, 0.0),
-      end: Offset.zero
+      begin: Offset.zero,
+      end: Offset(1.0, 0.0)
   ).chain(CurveTween(
     curve: Curves.fastOutSlowIn,
   ));
@@ -66,7 +67,7 @@ class SwipableViewState extends State<SwipableView> with TickerProviderStateMixi
       _currentAnimation = animation;
     });
     animationController.reset();
-    animationController.forward();
+    animationController.reverse();
   }
 
   @override
@@ -77,16 +78,32 @@ class SwipableViewState extends State<SwipableView> with TickerProviderStateMixi
         _updateMessage('Dragging' + details.delta.toString());
       },
       onHorizontalDragEnd: (DragEndDetails details){
-        final double velocityNorm = 500; // Threshold which limit the swipe animation.
-        final double velocityX = details.primaryVelocity / velocityNorm;
-        if (velocityX > 1){
+        final double dxNorm = 1000; // Threshold which limit the swipe animation.
+        final double swipngAngleNorm = 40; //in degrees.
+        final double velocityX = details.velocity.pixelsPerSecond.dx / dxNorm;
+        final double swipingAngle = (details.velocity.pixelsPerSecond.direction * 180 / pi).abs();
+
+        if (velocityX > 1 && swipingAngle < swipngAngleNorm ){
           _updateAnimation(_animationFromLeft);
-        } else if (velocityX < -1){
+        } else if (velocityX < -1 && swipingAngle > 180 - swipngAngleNorm){
           _updateAnimation(_animationFromRight);
         }
-        _updateMessage('Drag finished derected to ' + (velocityX < 0 ? 'Left ' : 'Right ') + velocityX.toString());
+        _updateMessage(
+            'Drag finished derected to ' +
+                (velocityX < 0 ? 'Left ' : 'Right ') + 'angle ' + swipingAngle.toString()
+        );
       },
-      child: SlideTransition(
+      child: Stack(
+        children: <Widget>[
+          Container(
+            decoration: BoxDecoration(
+                color: Colors.blue[100]
+            ),
+            child: Center(
+              child: Text(_message),
+            ),
+          ),
+          SlideTransition(
           position: _currentAnimation,
           child: Container(
             decoration: BoxDecoration(
@@ -96,7 +113,10 @@ class SwipableViewState extends State<SwipableView> with TickerProviderStateMixi
               child: Text(_message),
             ),
           ),
+        ),
+        ],
       ),
+
 
     );
 
