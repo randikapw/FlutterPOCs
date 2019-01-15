@@ -28,24 +28,124 @@ class CalendarNav extends StatefulWidget {
   CalendarNavState createState() => CalendarNavState();
 }
 
-class CalendarNavState extends State<CalendarNav> {
+class CalendarNavState extends State<CalendarNav> with TickerProviderStateMixin{
 
-  DateTime now;
-  _NavigationHeader header;
   static const Duration _weekDuration = Duration(days: 7);
+  DateTime now;
+  final List<_NavigationHeader> _headers = <_NavigationHeader>[];
+
+  ///ANIMATION RELATED DATA
+  AnimationController animationController; //Always keep in mind to dispose this controller when disposing the widget
+
+  static final Animatable<Offset> _tweenLeaveFromLeft = Tween<Offset>(
+      begin: Offset.zero,
+      end: Offset(-1.0, 0.0)
+  ).chain(CurveTween(
+    curve: Curves.easeIn,
+  ));
+
+  static final Animatable<Offset> _tweenLeaveFromRight = Tween<Offset>(
+      begin: Offset.zero,
+      end: Offset(1.0, 0.0)
+  ).chain(CurveTween(
+    curve: Curves.easeIn,
+  ));
+
+  static final Animatable<Offset> _tweenEnterFromRight = Tween<Offset>(
+      begin: Offset(1.0, 0.0),
+      end: Offset.zero
+  ).chain(CurveTween(
+    curve: Curves.easeIn,
+  ));
+
+  static final Animatable<Offset> _tweenEnterFromLeft = Tween<Offset>(
+      begin: Offset(-1.0, 0.0),
+      end: Offset.zero
+  ).chain(CurveTween(
+    curve: Curves.easeIn,
+  ));
+  
+
+  Animation<Offset> _animationLeaveFromLeft;
+  Animation<Offset> _animationLeaveFromRight;
+  Animation<Offset> _animationEnterFromLeft;
+  Animation<Offset> _animationEnterFromRight;
+  Animation<Offset> _currentAnimation;
+  Animation<Offset> _stay;
+
+
+
+  @override
+  void dispose() {
+    animationController.dispose();
+  }
 
   @override
   void initState() {
     super.initState();
     now = DateTime.now();
-    header = _NavigationHeader(now);
+
+    animationController = AnimationController(
+        duration: Duration(milliseconds: 700),
+        vsync: this);
+    _animationLeaveFromLeft = animationController.drive(_tweenLeaveFromLeft);
+    _animationLeaveFromRight = animationController.drive(_tweenLeaveFromRight);
+    _animationEnterFromLeft = animationController.drive(_tweenEnterFromLeft);
+    _animationEnterFromRight = animationController.drive(_tweenEnterFromRight);
+    _currentAnimation = _animationEnterFromRight;
+    _stay = Tween<Offset>(begin: Offset.zero, end: Offset.zero).animate(animationController);
+
+    _headers.add(_NavigationHeader(now,_stay));
+  }
+
+  //Animation status listners
+  void _onLeftToRightAnimationCompleted(AnimationStatus status){
+    if (AnimationStatus.completed == status) {
+      animationController.removeStatusListener(
+          _onLeftToRightAnimationCompleted);
+      if (_headers.length > 1) {
+        _headers.removeLast();
+      }
+    }
+  }
+
+
+  void _onRightToLeftAnimationCompleted(AnimationStatus status){
+    if (AnimationStatus.completed == status) {
+        print('Animation completed.');
+        animationController.removeStatusListener(_onRightToLeftAnimationCompleted);
+        _headers.removeAt(0);
+    }
   }
 
   void _changeWeekTo(DateTime newDate){
+    int dayDiff = newDate.difference(now).inDays;
     now = newDate;
-    setState(() {
-      header = _NavigationHeader(newDate);
-    });
+    print(dayDiff);
+    if (dayDiff == 0){
+      return;
+    } else if (dayDiff > 0) {
+      setState(() {
+        _NavigationHeader newHeader = _NavigationHeader(
+            newDate, _animationEnterFromRight);
+        _headers.add(newHeader);
+        _headers.first._currentAnimation = _animationLeaveFromLeft;
+        animationController.reset();
+        animationController.forward();
+        animationController.addStatusListener(_onRightToLeftAnimationCompleted);
+      });
+    } else {
+      setState(() {
+        _NavigationHeader newHeader = _NavigationHeader(
+            newDate, _animationEnterFromLeft);
+        _headers.add(newHeader);
+        _headers.first._currentAnimation = _animationLeaveFromRight;
+        animationController.reset();
+        animationController.forward();
+        animationController.addStatusListener(_onLeftToRightAnimationCompleted);
+      }
+      );
+    }
   }
 
   void _onDragEnd(DragEndDetails details){
@@ -69,7 +169,9 @@ class CalendarNavState extends State<CalendarNav> {
   Widget build(BuildContext context) {
     return GestureDetector(
       onHorizontalDragEnd: _onDragEnd,
-      child: header,
+      child: Stack(
+        children: _headers,
+      ),
     );
 
   }
@@ -80,13 +182,17 @@ class CalendarNavState extends State<CalendarNav> {
 
 class _NavigationHeader extends StatelessWidget {
   /// Constructor.
-  _NavigationHeader(this.currentDate){
+  _NavigationHeader(this.currentDate,this._currentAnimation){
     _generateCurrentShowingWeek();
+    currentYear = currentDate.year.toString();
+    currentMonth = DateFormat.MMMM().format(currentDate);
   }
 
   ///Fields
   DateTime currentDate;
   List<_WeekDay> currentShowingWeek;
+  Animation<Offset> _currentAnimation;
+  String currentYear,currentMonth;
 
   void _generateCurrentShowingWeek(){
     currentShowingWeek = <_WeekDay>[];
@@ -113,8 +219,8 @@ class _NavigationHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       mainAxisAlignment: MainAxisAlignment.center,
       children: <Widget>[
-        Text('2019, ', style: Theme.of(context).textTheme.title,),
-        Text('Januray', style: Theme.of(context).textTheme.title,),
+        Text(currentYear + ', ', style: Theme.of(context).textTheme.title,),
+        Text(currentMonth, style: Theme.of(context).textTheme.title,),
       ],
     );
     // Generate week view and navigation buttons.
@@ -123,15 +229,18 @@ class _NavigationHeader extends StatelessWidget {
     );
 
     // Return above generated widgets arranging in a column.
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-      ),
-      child: Column(
-        children: <Widget>[
-          monthInfo,
-          weekInfo
-        ],
+    return SlideTransition(
+      position: _currentAnimation,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+        ),
+        child: Column(
+          children: <Widget>[
+            monthInfo,
+            weekInfo
+          ],
+        ),
       ),
     );
   }
