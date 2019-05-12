@@ -1,57 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../CalendarNavigationWidget.dart';
 import 'date_cell.dart';
+import '../bloc/bloc.dart';
+import '../bloc/provider.dart';
 
-class NavigationHeader extends StatefulWidget {
+class NavigationHeader extends StatelessWidget {
 
   DateTime currentDate;
-  double _possitonTop,_possitionLeft = 0.0;
-  NavigationHeaderState _state;
+  int index = 0;
 
-  NavigationHeader(this.currentDate,this._possitonTop);
-
-  @override
-  State createState() {
-    _state = NavigationHeaderState(this.currentDate,);
-    return _state;
-  }
-
-  void setTop(double top) {
-    if(_state != null && _state.mounted) {
-      _state.setState(() {
-        _possitonTop = top;
-      });
-    }
-  }
-
-
-
-  void offsetHorizontally(double diff) {
-    if(_state != null && _state.mounted) {
-
-      _state.setState(() {
-        _possitionLeft += diff;
-      });
-    } else {
-      print("Warning!!!");
-      _possitionLeft += diff;
-    }
-  }
-}
-
-class NavigationHeaderState extends State<NavigationHeader> {
-  /// Constructor.
-  NavigationHeaderState(this.currentDate) {
+  NavigationHeader(this.currentDate){
     currentYear = currentDate.year.toString();
     currentMonth = DateFormat.MMMM().format(currentDate);
     _generateCurrentShowingWeek();
   }
 
-
   ///Fields
-  DateTime currentDate;
   List<DateCell> currentShowingWeek;
   String currentYear, currentMonth;
 
@@ -74,6 +39,10 @@ class NavigationHeaderState extends State<NavigationHeader> {
           .add(DateCell(date: weekStartDate.add(Duration(days: i))));
     }
   }
+
+//  double _getPositionFromOffset(double newOffset, BuildContext context){
+//    return  _possitionLeft = (index * MediaQuery.of(context).size.width + snapshot.data.horizontalOffset
+//  }
 
   @override
   Widget build(BuildContext context) {
@@ -99,19 +68,27 @@ class NavigationHeaderState extends State<NavigationHeader> {
 
     // Return above generated widgets arranging in a column.
     return
-      AnimatedPositioned(
-        top: widget._possitonTop,
-        left: widget._possitionLeft,
-        width: MediaQuery.of(context).size.width,
-        duration: Duration(milliseconds: 1),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).cardColor,
-          ),
-          child: Column(
-            children: <Widget>[monthInfo, weekInfo],
-          ),
-        ),
-      );
+      StreamBuilder<NavHeaderPosition>(
+          initialData: Provider.of(context).currentNavHeaderPosition,
+          stream: Provider.of(context).navHeaderConfigs,
+          builder: (context,snapshot){
+            return AnimatedPositioned(
+              bottom: 0.0,
+//              top: snapshot.data,
+//              left: snapshot.hasData ? index * MediaQuery.of(context).size.width + (_possitionLeft += snapshot.data.horizontalOffset) : 0.0,
+              left: index * MediaQuery.of(context).size.width + snapshot.data.horizontalOffset,
+              width: MediaQuery.of(context).size.width,
+              duration: snapshot.data.animationDuration,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                ),
+                child: Column(
+                  children: <Widget>[monthInfo, weekInfo],
+                ),
+              ),
+            );
+          });
+
   }
 }

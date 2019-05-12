@@ -1,7 +1,10 @@
 import 'dart:math';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'bloc/bloc.dart';
+import 'bloc/provider.dart';
 import 'widgets/navigation_header.dart';
 
 void main() {
@@ -35,35 +38,34 @@ class CalendarNav extends StatefulWidget {
 class CalendarNavState extends State<CalendarNav>
     with TickerProviderStateMixin {
 
+
   static const Duration _weekDuration = Duration(days: 7);
+
+  final Bloc bloc = Bloc();
   List<NavigationHeader> _headers = <NavigationHeader>[];
   final List<_ListItem> _listItems = <_ListItem>[];
   DateTime now;
 
   // Motion, Positioning, Animation related variables.
-  double _scrollStartPosition;
-  static const double
-      _MaxNavigatorHeight = 100.0,
-      _MinNavigatorHeight = 40.0,
-      _MinNavigatorTop = -20.0,
-      _MaxNavigatorTop = 25.0;
+  double _scrollStartPosition,_hDragOffset = 0,_screenWidth;
 
-  double _currentNavigatorHeight = _MaxNavigatorHeight;
-  double currentNavigatorTop = _MaxNavigatorTop;
-  double _navigatorHorzontalDraginDiff;
+
+  double _currentNavigatorHeight;
+  double currentNavigatorTop = Bloc.MaxNavigatorTop;
 
   @override
   void initState() {
     super.initState();
     now = DateTime.now();
 
-    _headers.add(NavigationHeader(now.subtract(_weekDuration),currentNavigatorTop));
-    _headers.add(NavigationHeader(now,currentNavigatorTop));
-    _headers.add(NavigationHeader(now.add(_weekDuration),currentNavigatorTop));
-    
-    final double offset = 200.0;
-    _headers[0].offsetHorizontally(-offset);
-    _headers[2].offsetHorizontally(offset);
+    // Initiate listener for update currentHeight.
+    bloc.navHeaderConfigs.listen((NavHeaderPosition newPosition) { _currentNavigatorHeight = newPosition.height;});
+
+    _headers.add(NavigationHeader(now.subtract(_weekDuration)));
+    _headers.add(NavigationHeader(now));
+    _headers.add(NavigationHeader(now.add(_weekDuration)));
+    _headers.first.index = -1;
+    _headers.last.index = 1;
 
 
     for (int i = 0; i < 20; i++) {
@@ -80,20 +82,21 @@ class CalendarNavState extends State<CalendarNav>
     } else if (dayDiff > 0) { //TODO: this logic should change when date can be selected from date picker.
       setState(() {
         NavigationHeader newHeader =
-            NavigationHeader(now.add(_weekDuration),currentNavigatorTop);
-        _headers = <NavigationHeader>[];
+            NavigationHeader(now.add(_weekDuration));
         _headers.add(newHeader);
-        //_headers.removeAt(0);
+        _headers.removeAt(0);
       });
     } else {
       setState(() {
         NavigationHeader newHeader =
-            NavigationHeader(now.subtract(_weekDuration),currentNavigatorTop);
-        //_headers.insert(0,newHeader);
-       // _headers.add(newHeader);
+            NavigationHeader(now.subtract(_weekDuration));
+        _headers.insert(0,newHeader);
         _headers.removeLast();
       });
     }
+    _headers.first.index = -1;
+    _headers.elementAt(1).index = 0;
+    _headers.last.index = 1;
   }
 
   void _onDragEnd(DragEndDetails details) {
@@ -103,44 +106,94 @@ class CalendarNavState extends State<CalendarNav>
     final double swipingAngle =
         (details.velocity.pixelsPerSecond.direction * 180 / pi).abs();
 
-    if (velocityX > 1 && swipingAngle < swipngAngleNorm) {
-      //_updateAnimation(_animationFromLeft);
-      print('Swiped Left to Right');
-      _changeWeekTo(now.subtract(_weekDuration));
-    } else if (velocityX < -1 && swipingAngle > 180 - swipngAngleNorm) {
-      //_updateAnimation(_animationFromRight);
-      print('Swiped Right to Left');
-      _changeWeekTo(now.add(_weekDuration));
+    final double absVelocityX = velocityX.abs();
+    if (absVelocityX > 1) {
+      DateTime newDate;
+      if (velocityX > 1 && swipingAngle < swipngAngleNorm) {
+        print('Swiped Left to Right');
+        newDate = now.subtract(_weekDuration);
+        _hDragOffset = _screenWidth;
+      } else if (velocityX < -1 && swipingAngle > 180 - swipngAngleNorm) {
+        print('Swiped Right to Left');
+        newDate = now.add(_weekDuration);
+        _hDragOffset = -_screenWidth;
+      }
+      print("Norm velocity : ${velocityX.abs()}");
+      Duration d = Duration(milliseconds: (800 / absVelocityX).round());
+      Timer(d,(){
+        _changeWeekTo(newDate);
+        bloc.setNavHeaderHoffsetWithDuration(_hDragOffset = 0, Duration(milliseconds: 10));
+      });
+      bloc.setNavHeaderHoffsetWithDuration(_hDragOffset, d);
+    } else {
+      // Drag end speed is not enough for navigate across weeks.
+      Duration d = Duration(milliseconds: (500 * _hDragOffset.abs()/_screenWidth).round());
+      Timer(d,(){
+        bloc.setNavHeaderHoffsetWithDuration(_hDragOffset = 0, Duration(milliseconds: 10));
+      });
+      bloc.setNavHeaderHoffsetWithDuration(_hDragOffset = 0, d);
     }
   }
 
   void _onDragUpdae(DragUpdateDetails d){
+        bloc.navHeaderSetHorizontalOffset(_hDragOffset += d.primaryDelta);
 //              _headers[0].offsetHorizontally(d.primaryDelta);
 //              _headers[1].offsetHorizontally(d.primaryDelta);
-    _headers.last.offsetHorizontally(d.primaryDelta);
+//    _headers.last.offsetHorizontally(d.primaryDelta);
+  }
+
+  bool _onScrollNotification (ScrollNotification notification){
+    if (notification is ScrollUpdateNotification) {
+      // notification.metrics.axisDirection == AxisDirection.down
+      double scrollDiff = (_scrollStartPosition - notification.metrics.pixels)/4;
+      _scrollStartPosition = notification.metrics.pixels;
+      print(notification.metrics.extentAfter);
+      //if (notification.metrics.extentAfter < 10 && scrollDiff < 0) scrollDiff *= -2;
+      double proposedNavigatorHeight = _currentNavigatorHeight + scrollDiff;
+      double proposedNavigatorTop = currentNavigatorTop + scrollDiff;
+      proposedNavigatorTop = proposedNavigatorTop < Bloc.MinNavigatorTop ? Bloc.MinNavigatorTop : proposedNavigatorTop;
+      if (proposedNavigatorHeight <= Bloc.MaxNavigatorHeight && proposedNavigatorHeight >= Bloc.MinNavigatorHeight)
+        setState(() {
+//          _currentNavigatorHeight = proposedNavigatorHeight;
+        bloc.navHeaderSetSize(proposedNavigatorHeight);
+          currentNavigatorTop = proposedNavigatorTop;
+        });
+    } else if(notification is ScrollStartNotification){
+      _scrollStartPosition = notification.metrics.pixels;
+    }
+    if(notification is ScrollEndNotification) {
+      print("Scroll End");
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    double screenWidth = MediaQuery.of(context).size.width;
-    print("Screen Width $screenWidth");
-    return Column(children: <Widget>[
+    _screenWidth = MediaQuery.of(context).size.width;
+
+    Provider provider = Provider(bloc, child:
+      Column(children: <Widget>[
       // Start navigation header
-      AnimatedSize(
-        vsync: this,
-        duration: Duration(milliseconds: 1000),
-        child: Container(
-          height: _currentNavigatorHeight,
-          child:
-          GestureDetector(
-            onHorizontalDragEnd: _onDragEnd,
-            onHorizontalDragUpdate: _onDragUpdae,
-            child: Stack(
-              children: _headers,
+        StreamBuilder<NavHeaderPosition>(
+            initialData: bloc.currentNavHeaderPosition,
+            stream: bloc.navHeaderConfigs,
+            builder: (context, snapshot) {
+          return  AnimatedSize(
+            vsync: this,
+            duration: Duration(milliseconds: 10),
+            child: Container(
+              height: snapshot.data.height,
+              child:
+              GestureDetector(
+                onHorizontalDragUpdate: _onDragUpdae,
+                onHorizontalDragEnd: _onDragEnd,
+                child: Stack(
+                  children: _headers,
+                ),
+              ),
             ),
-          ),
-        ),
-      ),
+          );
+    }),
+      // End navigation header..
       Divider(
         height: 1.0,
       ),
@@ -159,34 +212,7 @@ class CalendarNavState extends State<CalendarNav>
       Flexible(
         // Wrapping the list with notification listener.
         child: NotificationListener<ScrollNotification>(
-          onNotification: (ScrollNotification notification){
-            if (notification is ScrollUpdateNotification) {
-             // notification.metrics.axisDirection == AxisDirection.down
-              double scrollDiff = (_scrollStartPosition - notification.metrics.pixels)/4;
-              _scrollStartPosition = notification.metrics.pixels;
-              print(notification.metrics.extentAfter);
-              //if (notification.metrics.extentAfter < 10 && scrollDiff < 0) scrollDiff *= -2;
-              double proposedNavigatorHeight = _currentNavigatorHeight + scrollDiff;
-              double proposedNavigatorTop = currentNavigatorTop + scrollDiff;
-              proposedNavigatorTop = proposedNavigatorTop < _MinNavigatorTop ? _MinNavigatorTop : proposedNavigatorTop;
-              if (proposedNavigatorHeight <= _MaxNavigatorHeight && proposedNavigatorHeight >= _MinNavigatorHeight)
-              setState(() {
-                _currentNavigatorHeight = proposedNavigatorHeight;
-                currentNavigatorTop = proposedNavigatorTop;
-                int i = 1;
-                for (NavigationHeader n in _headers){
-                  print(i++);
-                  n.setTop(currentNavigatorTop);
-                }
-                print('...');
-              });
-            } else if(notification is ScrollStartNotification){
-              _scrollStartPosition = notification.metrics.pixels;
-            }
-            if(notification is ScrollEndNotification) {
-              print("Scroll Endd");
-            }
-          },
+          onNotification: _onScrollNotification,
         child: ListView.builder(
           padding: EdgeInsets.all(8.0),
           reverse: false,
@@ -194,7 +220,12 @@ class CalendarNavState extends State<CalendarNav>
           itemCount: _listItems.length,
         )),
       ),
-    ]);
+    ])
+    );
+    if (_currentNavigatorHeight == null) {
+      bloc.navHeaderSetSize(Bloc.MaxNavigatorHeight);
+    }
+    return provider;
   }
 }
 
