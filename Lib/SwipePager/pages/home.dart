@@ -24,7 +24,7 @@ class HomePage extends StatelessWidget {
 
     return Container(
       child: SwipeContainer(
-      child: Row(
+      child: () => Row(
         children: <Widget>[
           Expanded(
             child: Container(
